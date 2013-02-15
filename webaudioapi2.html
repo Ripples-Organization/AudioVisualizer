@@ -1,0 +1,177 @@
+<!DOCTYPE>
+<html>
+    
+    <head>
+        <script type="text/javascript" src="http://code.jquery.com/jquery-latest.min.js"></script>
+        <style>
+          #soundTest {
+            margin: 50px auto;
+            display: block;
+            box-shadow: 0 0px 41px rgb(180, 180, 180);
+          }
+          #notes {
+            margin-left: 10%;
+          }
+        </style>
+    </head>
+    
+    <body>
+        
+        <div id="notes">Loading of a song may take a few seconds</div>
+        <canvas id="soundTest" class="dropZone"></canvas>
+
+        <script>
+
+            var ctx; //audio context 
+            var buf; //audio buffer 
+            var fft; //fft audio node 
+            var src;
+            var samples = 128; 
+            var setup = false; //indicate if audio is set up yet 
+            var bghue = 128; // bg color will change every frame
+            var ffthue = 360; // the fft data will also change every frame
+            var sat = 100; // saturation of fft data color
+            var curFiles = [];
+            var canvas = document.getElementById('soundTest');
+             
+            //init the sound system 
+            function init() { 
+                console.log("in init"); 
+                try { 
+                    ctx = new webkitAudioContext(); //is there a better API for this? 
+                    setupCanvas(); 
+                    loadFile(curFiles); 
+                } catch(e) { 
+                    console.log('you need webaudio support' + e); 
+                } 
+            } 
+            window.addEventListener('load',init,false); 
+             
+            //load the mp3 file 
+            function loadFile(files) { 
+                var req = new XMLHttpRequest(); 
+                if (files.length != 0) {
+                    req.open("GET", files[0].name, true);
+                } else {
+                    //req.open("GET","HYUNA \'Bubble Pop!\'.mp3",true); 
+                    req.open("GET","Elaquent - So Far_ So Good.mp3",true);
+                    //req.open("GET","file:///C:/Users/James/Music/Andy%20McKee%20-%20Rylynn%20-%20Acoustic%20Guitar%20-%20www.candyrat.mp3",true);
+                }
+                //we can't use jquery because we need the arraybuffer type 
+                req.responseType = "arraybuffer"; 
+                req.onload = function() { 
+                    //decode the loaded data 
+                    ctx.decodeAudioData(req.response, function(buffer) { 
+                        buf = buffer; 
+                        play(); 
+                    }); 
+                }; 
+                req.send(); 
+
+            }
+
+            function play() { 
+                //create a source node from the buffer 
+                src = ctx.createBufferSource();  
+                src.buffer = buf; 
+                 
+                //create fft 
+                fft = ctx.createAnalyser(); 
+                fft.fftSize = samples; 
+                 
+                //connect them up into a chain 
+                src.connect(fft); 
+                fft.connect(ctx.destination); 
+                 
+                //play immediately 
+                src.noteOn(0); 
+                setup = true; 
+            }
+
+            function stop() {
+                src.disconnect();
+                fft.disconnect();
+                setup = false;
+            }
+
+            var gfx; 
+            function setupCanvas() { 
+                var canvas = document.getElementById('soundTest');
+                gfx = canvas.getContext('2d'); 
+                webkitRequestAnimationFrame(update); 
+
+                $('#soundTest').attr('height', $(window).height()*.85);
+                $('#soundTest').attr('width', $(window).width()*.9);
+            } 
+
+            function update() { 
+                bghue += 1;
+                ffthue -= 1;
+
+                if (bghue > 360) {
+                  bghue -= 360;
+                }
+                if (ffthue < 0) {
+                  ffthue += 360;
+                }
+
+                var dataHue = ffthue;
+
+                webkitRequestAnimationFrame(update); 
+                gfx.clearRect(0,0,canvas.width,canvas.height); 
+                gfx.fillStyle = 'hsl(' + bghue + ', ' + sat + '%, 80%)';
+                gfx.fillRect(0,0,canvas.width,canvas.height); 
+
+                if(!setup) return; 
+                 
+                var data = new Uint8Array(samples); 
+                fft.getByteFrequencyData(data);
+
+                var dataLen = data.length;
+
+                for(var i=0; i<dataLen; i+=1) { 
+                    var xPos = i * 30 + 200;
+                    var yPos = canvas.height/2;
+
+                    if (xPos > canvas.width) {
+                      xPos -= canvas.width;
+                      yPos += canvas.height/4;
+                    }
+
+                    gfx.fillStyle = 'hsl(' + dataHue + ', ' + sat + '%, 50%)';
+                    gfx.beginPath();
+                    gfx.arc(xPos, yPos, data[i], 0, Math.PI*2, true);
+                    gfx.fill();
+                    dataHue -= 8;
+                    if (dataHue < 0) {
+                      dataHue += 360;
+                    }
+                } 
+                 
+            } 
+
+            // Setup the dnd listeners.
+            canvas.addEventListener('dragover', handleDragOver, false);
+            canvas.addEventListener('drop', handleFileSelect, false); 
+
+            function handleFileSelect(evt) {
+                evt.stopPropagation();
+                evt.preventDefault();
+
+                var files = evt.dataTransfer.files; // FileList object.
+
+                stop();
+                loadFile(files);
+                
+                console.log(files);
+              }
+
+              function handleDragOver(evt) {
+                evt.stopPropagation();
+                evt.preventDefault();
+                evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+              }            
+        </script>
+    </body>
+
+</html>
